@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intelligent Attendance Analytics Platform</title>
+<style>
+:root{--bg:#f3f6fb;--card:#fff;--ink:#14213d;--mute:#5b6b85;--line:#d6deeb;--navy:#0c2340;--blue:#1f5fa8;--hi:#b42318;--hib:#fde8e6;--md:#9a5b00;--mdb:#fff1d6;--lo:#13683a;--lob:#dff5e7}
+@media(prefers-color-scheme:dark){:root{--bg:#0b1424;--card:#13203a;--ink:#e6ecf7;--mute:#9db0cf;--line:#26385c;--navy:#07101f;--blue:#6fa8ee;--hi:#ff9a8f;--hib:#4a1d1a;--md:#ffc666;--mdb:#47340f;--lo:#7fdca2;--lob:#12361f}}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Calibri,Arial,sans-serif}
+header{background:var(--navy);color:#fff;padding:18px 24px}
+header h1{margin:0;font:700 22px Cambria,Georgia,serif}
+header p{margin:4px 0 0;color:#b9c8e3;font-size:13px}
+main{max-width:1180px;margin:0 auto;padding:20px;display:grid;gap:18px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat b{display:block;font-size:26px}
+.stat span{color:var(--mute);font-size:13px}
+.two{display:grid;grid-template-columns:minmax(260px,1fr) 2fr;gap:18px}
+@media(max-width:820px){.two{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+h2{margin:0 0 10px;font:700 17px Cambria,Georgia,serif}
+.note{color:var(--mute);font-size:13px;margin:0 0 10px}
+label{display:block;font-size:13px;color:var(--mute);margin:8px 0 2px}
+input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+input:focus,button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button{padding:8px 14px;border-radius:6px;border:1px solid var(--blue);background:var(--blue);color:#fff;font:600 14px Calibri,Arial,sans-serif;cursor:pointer}
+button.alt{background:transparent;color:var(--blue)}
+button:active{transform:translateY(1px)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:600;white-space:nowrap}
+.pill{display:inline-block;padding:1px 9px;border-radius:99px;font-weight:700;font-size:13px}
+.High{background:var(--hib);color:var(--hi)}.Medium{background:var(--mdb);color:var(--md)}.Low{background:var(--lob);color:var(--lo)}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+ul{margin:0;padding-left:18px}li{margin:3px 0}
+.empty{color:var(--mute);font-style:italic}
+.alert{background:var(--hib);color:var(--hi);border-radius:8px;padding:8px 12px;font-weight:600;display:none}
+code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Intelligent Attendance Analytics Platform</h1>
+  <p>Fraud detection with hand-built algorithms: Rabin-Karp, Miller-Rabin, Aho-Corasick, edit distance, Dinic max-flow / min-cut, vertex-cover approximation</p>
+</header>
+<main>
+  <div class="alert" id="alert"></div>
+  <div class="stats" id="stats"></div>
+  <div class="two">
+    <section>
+      <h2>Record a check-in</h2>
+      <p class="note">Each check-in enters a queue and is analysed on arrival.</p>
+      <label for="id">Student ID</label><input id="id" value="2510030101" inputmode="numeric">
+      <label for="ip">IP address</label><input id="ip" value="10.20.4.11">
+      <label for="dev">Device</label><input id="dev" value="Pixel 7">
+      <label for="t">Time since lecture start (seconds)</label><input id="t" type="number" value="0" min="0">
+      <div class="row">
+        <button id="add">Add check-in</button>
+        <button class="alt" id="demo">Load demo class</button>
+        <button class="alt" id="clear">Clear</button>
+      </div>
+    </section>
+    <section>
+      <h2>Attendance log with fraud scores</h2>
+      <p class="note">Alert threshold: a score above 70 is flagged for faculty.</p>
+      <div class="scroll"><table id="log"></table></div>
+    </section>
+  </div>
+  <div class="grid3">
+    <section><h2>Proxy group (min-cut)</h2><p class="note">Students linked by shared subnet and near-identical check-in time, separated from clean students by a min-cut.</p><div id="grp"></div></section>
+    <section><h2>Audit list (vertex cover)</h2><p class="note">A 2-approximation: the fewest students to audit so every suspicious pair is covered.</p><div id="vc"></div></section>
+    <section><h2>Reviewer assignment (max-flow)</h2><p class="note">Flagged records are matched to reviewers by specialty, two cases each.</p><div id="asg"></div></section>
+  </div>
+  <section>
+    <h2>How the engine works</h2>
+    <p class="note" style="margin:0">Duplicate check: polynomial fingerprint of <code>ID|session</code> under two primes picked with Miller-Rabin. Pattern check: Aho-Corasick scans <code>IP + device</code> for blacklisted strings in one pass. Near-duplicate IDs: Levenshtein distance of 1 or less from the same IP. Proxy group: similarity graph, Dinic max-flow, residual reachable set is the min-cut side. Score: duplicate 60, blacklist 40, group 35, near-duplicate ID 25, capped at 100.</p>
+  </section>
+</main>
+<script>
+/* ---------- Miller-Rabin (Module 6) ---------- */
+const mp=(b,e,m)=>{let r=1n;b%=m;while(e>0n){if(e&1n)r=r*b%m;b=b*b%m;e>>=1n}return r};
+const BASES=[2n,3n,5n,7n,11n,13n];
+function isPrime(n){n=BigInt(n);if(n<2n)return false;
+  for(const p of BASES){if(n===p)return true;if(n%p===0n)return false}
+  let d=n-1n,s=0;while(d%2n===0n){d/=2n;s++}
+  for(const a of BASES){let x=mp(a,d,n);if(x===1n||x===n-1n)continue;let ok=false;
+    for(let i=1;i<s;i++){x=x*x%n;if(x===n-1n){ok=true;break}}
+    if(!ok)return false}
+  return true}
+function randPrime(){let n;do{n=(1e9+Math.floor(Math.random()*1e9))|1}while(!isPrime(n));return n}
+
+/* ---------- Rabin-Karp polynomial fingerprint, double hashing (Module 2) ---------- */
+const P1=randPrime(),P2=randPrime(),BASE=257;
+function fp(s){let a=0,b=0;for(const c of s){const x=c.charCodeAt(0);a=(a*BASE+x)%P1;b=(b*BASE+x)%P2}return a+':'+b}
+
+/* ---------- Aho-Corasick multi-pattern matching (Module 2) ---------- */
+const PATTERNS=['10.66.','192.0.2.','emulator','rooted','vpn'];
+function buildAC(pats){
+  const g=[{n:{},f:0,o:[]}];
+  for(const p of pats){let s=0;for(const c of p){if(g[s].n[c]===undefined){g.push({n:{},f:0,o:[]});g[s].n[c]=g.length-1}s=g[s].n[c]}g[s].o.push(p)}
+  const q=Object.values(g[0].n);
+  while(q.length){const u=q.shift();
+    for(const c in g[u].n){const v=g[u].n[c];let f=g[u].f;
+      while(f&&g[f].n[c]===undefined)f=g[f].f;
+      g[v].f=(g[f].n[c]!==undefined&&g[f].n[c]!==v)?g[f].n[c]:0;
+      g[v].o=g[v].o.concat(g[g[v].f].o);q.push(v)}}
+  return g}
+const AC=buildAC(PATTERNS);
+function scan(t){let s=0;const hit=[];
+  for(const c of t.toLowerCase()){while(s&&AC[s].n[c]===undefined)s=AC[s].f;
+    if(AC[s].n[c]!==undefined)s=AC[s].n[c];
+    for(const o of AC[s].o)if(hit.indexOf(o)<0)hit.push(o)}
+  return hit}
+
+/* ---------- Edit distance, Wagner-Fischer (Module 3) ---------- */
+function lev(a,b){let p=[];for(let j=0;j<=b.length;j++)p[j]=j;
+  for(let i=1;i<=a.length;i++){const c=[i];
+    for(let j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));
+    p=c}
+  return p[b.length]}
+
+/* ---------- Dinic max-flow / min-cut (Module 4) ---------- */
+class Dinic{
+  constructor(n){this.n=n;this.g=Array.from({length:n},()=>[]);this.e=[]}
+  add(u,v,c,rc=0){const i=this.e.length;this.g[u].push(i);this.e.push({v,c});this.g[v].push(i+1);this.e.push({v:u,c:rc});return i}
+  bfs(s,t){this.lv=Array(this.n).fill(-1);this.lv[s]=0;const q=[s];
+    while(q.length){const u=q.shift();for(const i of this.g[u]){const x=this.e[i];if(x.c>0&&this.lv[x.v]<0){this.lv[x.v]=this.lv[u]+1;q.push(x.v)}}}
+    return this.lv[t]>=0}
+  dfs(u,t,f){if(u===t)return f;
+    for(;this.it[u]<this.g[u].length;this.it[u]++){const i=this.g[u][this.it[u]],x=this.e[i];
+      if(x.c>0&&this.lv[x.v]===this.lv[u]+1){const d=this.dfs(x.v,t,Math.min(f,x.c));if(d>0){x.c-=d;this.e[i^1].c+=d;return d}}}
+    return 0}
+  run(s,t){let F=0;while(this.bfs(s,t)){this.it=Array(this.n).fill(0);let f;while((f=this.dfs(s,t,1e9))>0)F+=f}return F}
+}
+
+/* ---------- Engine ---------- */
+const subnet=ip=>ip.split('.').slice(0,3).join('.');
+const weight=(a,b)=>(subnet(a.ip)===subnet(b.ip)?3:0)+(Math.abs(a.t-b.t)<=5?2:0);
+const REVIEWERS=['Reviewer A (duplicates, patterns)','Reviewer B (duplicates, groups)','Reviewer C (patterns, groups)'];
+
+function analyze(logs){
+  const seen={},acc=[],rows=[];
+  for(const l of logs){
+    const k=fp(l.id+'|S1'),dup=seen[k]===1;seen[k]=1;
+    const hits=scan(l.ip+' '+l.dev);let near=null;
+    if(!dup)for(const a of acc){if(a.id!==l.id&&a.ip===l.ip&&lev(a.id,l.id)<=1){near=a.id;break}}
+    const r={...l,dup,hits,near,grp:false,score:0,why:[]};
+    if(dup){r.score+=60;r.why.push('Duplicate submission')}
+    if(hits.length){r.score+=40;r.why.push('Blacklisted pattern "'+hits[0]+'"')}
+    if(near){r.score+=25;r.why.push('ID one edit away from '+near)}
+    rows.push(r);if(!dup)acc.push(r)}
+  /* similarity graph over unique students */
+  const n=acc.length,pairs=[],sus=Array(n).fill(0),tot=Array(n).fill(0);
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const w=weight(acc[i],acc[j]);
+    tot[i]+=w;tot[j]+=w;if(w>=4){pairs.push([i,j,w]);sus[i]+=w;sus[j]+=w}}
+  let group=[];
+  if(n>=3&&pairs.length){
+    let s=0;for(let i=1;i<n;i++)if(sus[i]>sus[s])s=i;
+    let t=-1;for(let i=0;i<n;i++)if(i!==s&&sus[i]===0&&(t<0||acc[i].score<acc[t].score||(acc[i].score===acc[t].score&&tot[i]<tot[t])))t=i;
+    if(t>=0){const D=new Dinic(n);
+      for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){const w=weight(acc[i],acc[j]);if(w>0)D.add(i,j,w,w)}
+      D.run(s,t);
+      const side=[];for(let i=0;i<n;i++)if(D.lv[i]>=0)side.push(i);
+      group=side.filter(i=>pairs.some(p=>(p[0]===i&&side.indexOf(p[1])>=0)||(p[1]===i&&side.indexOf(p[0])>=0)))}}
+  if(group.length>=2)for(const i of group){acc[i].grp=true;acc[i].score+=35;acc[i].why.push('Linked to proxy group')}
+  else group=[];
+  for(const r of rows)r.score=Math.min(100,r.score);
+  /* vertex-cover 2-approximation via maximal matching (Module 5) */
+  const used={},cover=[];
+  for(const [i,j] of pairs)if(!used[i]&&!used[j]){used[i]=used[j]=1;cover.push(acc[i].id,acc[j].id)}
+  /* reviewer assignment by max-flow (Module 4) */
+  const flagged=rows.filter(r=>r.score>70),m=flagged.length,F=new Dinic(m+5),T=m+4,edges=[];
+  const elig=r=>r.dup?[0,1]:r.hits.length?[0,2]:r.grp?[1,2]:[0,1,2];
+  flagged.forEach((r,i)=>{F.add(0,i+1,1);edges[i]=elig(r).map(k=>[k,F.add(i+1,m+1+k,1)])});
+  for(let k=0;k<3;k++)F.add(m+1+k,T,2);
+  F.run(0,T);
+  const asg=flagged.map((r,i)=>{const hit=edges[i].find(([k,ei])=>F.e[ei].c===0);return{id:r.id,who:hit?REVIEWERS[hit[0]]:'Waiting for a free reviewer'}});
+  return{rows,uniq:n,group,cover,asg}}
+
+/* ---------- UI ---------- */
+let logs=[];
+const $=i=>document.getElementById(i);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const lvl=s=>s>70?'High':s>=40?'Medium':'Low';
+
+function render(){
+  const R=analyze(logs),flags=R.rows.filter(r=>r.score>70).length,dups=R.rows.filter(r=>r.dup).length;
+  $('stats').innerHTML=[['Check-ins received',logs.length],['Unique present',R.uniq+' / 120'],['Duplicates blocked',dups],['Critical flags',flags],['Proxy group size',R.group.length]]
+    .map(([a,b])=>'<div class="stat"><b>'+esc(b)+'</b><span>'+esc(a)+'</span></div>').join('');
+  const al=$('alert');al.style.display=flags?'block':'none';al.textContent=flags?flags+' record(s) above the 70 threshold. Review them below.':'';
+  $('log').innerHTML=logs.length?'<tr><th>Student ID</th><th>IP</th><th>Device</th><th>Time</th><th>Score</th><th>Reasons</th></tr>'+
+    R.rows.map(r=>'<tr><td>'+esc(r.id)+'</td><td>'+esc(r.ip)+'</td><td>'+esc(r.dev)+'</td><td>'+r.t+'s</td><td><span class="pill '+lvl(r.score)+'">'+r.score+'% '+lvl(r.score)+'</span></td><td>'+(r.why.length?esc(r.why.join('; ')):'None')+'</td></tr>').join('')
+    :'<tr><td class="empty">No check-ins yet. Add one or load the demo class.</td></tr>';
+  const U=R.rows.filter(r=>!r.dup);
+  $('grp').innerHTML=R.group.length?'<ul>'+R.group.map(i=>'<li>'+esc(U[i].id)+' ('+esc(U[i].ip)+', '+U[i].t+'s)</li>').join('')+'</ul>':'<span class="empty">No proxy group found.</span>';
+  $('vc').innerHTML=R.cover.length?'<ul>'+R.cover.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'<span class="empty">No suspicious pairs to cover.</span>';
+  $('asg').innerHTML=R.asg.length?'<ul>'+R.asg.map(a=>'<li>'+esc(a.id)+': '+esc(a.who)+'</li>').join('')+'</ul>':'<span class="empty">No flagged records to assign.</span>'}
+
+function add(l){logs.push(l);render()}
+$('add').onclick=()=>{
+  const id=$('id').value.trim(),ip=$('ip').value.trim(),dev=$('dev').value.trim(),t=Number($('t').value)||0;
+  if(!/^\d{6,12}$/.test(id)){alert('Enter a student ID of 6 to 12 digits.');return}
+  if(!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)){alert('Enter an IPv4 address such as 10.20.4.11.');return}
+  add({id,ip,dev:dev||'Unknown',t});$('t').value=t+7};
+$('clear').onclick=()=>{logs=[];render()};
+$('demo').onclick=()=>{
+  logs=[['2510030101','10.20.4.11','Pixel 7',0],['2510030102','10.20.4.37','iPhone 13',9],['2510030103','10.20.5.8','Galaxy S22',14],
+    ['2510030104','10.66.2.5','emulator-x86',20],['2510030104','10.66.2.5','emulator-x86',22],['2510030105','172.16.9.4','Moto G',31],
+    ['2510030106','172.16.9.9','Moto G',33],['2510030107','172.16.9.12','Moto G',34],['2510030108','10.20.4.52','Redmi 9',60],
+    ['2510030112','10.20.4.37','iPhone 13',70]].map(([id,ip,dev,t])=>({id,ip,dev,t}));
+  render()};
+render();
+</script>
+</body>
+</html>
